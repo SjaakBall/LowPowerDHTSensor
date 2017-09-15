@@ -1,5 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
+#include <Ticker.h>
 
 ESP8266WiFiMulti WiFiMulti;
 ADC_MODE(ADC_VCC);
@@ -7,6 +8,11 @@ ADC_MODE(ADC_VCC);
 #define VCC_ADJ   1.096
 
 #define pushButton    2
+
+Ticker tickerOSWatch;
+
+#define OSWATCH_RESET_TIME 30
+static unsigned long last_loop;
 
 const char* ssid     = "FartNet";
 const char* password = "1214406964";
@@ -17,8 +23,25 @@ const uint16_t port = 80;
 uint8_t MAC_array[6];
 char MAC_char[18];
 
+void ICACHE_RAM_ATTR osWatch(void) {
+  unsigned long t = millis();
+  unsigned long last_run = abs(t - last_loop);
+  Serial.printf("Watchdog last run took: %d\n", last_run);
+  if (last_run >= (OSWATCH_RESET_TIME * 1000)) {
+    Serial.println();
+    Serial.println("the watchdog kicks in!!!");
+    // save the hit here to eeprom or to rtc memory if needed
+    ESP.restart();  // normal reboot
+    //ESP.reset();  // hard reset
+  }
+}
+
 void setup() {
   Serial.begin(115200);
+
+  last_loop = millis();
+  tickerOSWatch.attach_ms(((OSWATCH_RESET_TIME / 3) * 1000), osWatch);
+
   delay(100);
 
   WiFiMulti.addAP(ssid, password);
@@ -68,6 +91,8 @@ void loop() {
 
     sendHttpData(url);
   }
+
+  last_loop = millis();
   delay(10000);
   //ESP.deepSleep(100000);
   //Serial.println("Start deep sleep");
